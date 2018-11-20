@@ -1,0 +1,12 @@
+server:
+  bind: ":9100"
+  verbose: true
+  appendlabel: true
+  labelname: "ae_source"
+
+timeout: 1000 #ms
+targets:
+    - "http://localhost:9101/metrics"
+    - "http://localhost:9102/metrics"
+    - "http://localhost:9103/metrics"
+    

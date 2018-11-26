@@ -1,0 +1,10 @@
+/var/log/prometheus/prometheus-aggregate-exporter.log {
+    rotate 4
+    size 100M
+    copytruncate
+    daily
+    missingok
+    notifempty
+    sharedscripts
+    compress
+}

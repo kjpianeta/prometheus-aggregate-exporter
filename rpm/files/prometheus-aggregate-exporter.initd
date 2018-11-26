@@ -19,7 +19,7 @@ DAEMON_CONFIG_FILE=/etc/sysconfig/prometheus/${PROG}-config.yml
 PID_FILE=/var/run/prometheus/${PROG}.pid
 LOG_FILE=/var/log/prometheus/${PROG}.log
 LOCK_FILE=/var/lock/subsys/${PROG}
-DAEMON_USER=${PROG}
+DAEMON_USER=prometheus
 
 FQDN=$(hostname --long)
 

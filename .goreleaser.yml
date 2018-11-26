@@ -1,17 +1,13 @@
-# This is an example goreleaser.yaml file with some sane defaults.
 # Make sure to check the documentation at http://goreleaser.com
-# before:
-  # hooks:
-    # you may remove this if you don't use vgo
-    # - go mod download
-    # you may remove this if you don't need go generate
-    # - go generate ./...
+before:
+  hooks:
+  - go get ./...
+
 builds:
   -
     main: cmd/prometheus-aggregate-exporter/main.go
     binary: prometheus-aggregate-exporter
     goos:
-      - darwin
       - linux
     goarch:
       - amd64
@@ -33,7 +29,7 @@ changelog:
     - '^docs:'
     - '^test:'
 nfpm:
-  name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  name_template: "{{ .ProjectName }}-{{ .Version }}.el6.{{ .Arch }}"
   maintainer: Kenneth Pianeta <kjpianeta@gmail.com>
   replacements:
     amd64: x86_64
@@ -45,13 +41,15 @@ nfpm:
   empty_folders:
     - /var/log/prometheus
     - /var/run/prometheus
+    - /etc/sysconfig/logrotate.d
   files:
     "rpm/files/prometheus-aggregate-exporter.initd": "/etc/init.d/prometheus-aggregate-exporter"
+    "rpm/files/prometheus-aggregate-exporter.logrotate": "/etc/sysconfig/logrotate.d/prometheus-aggregate-exporter"
   config_files:
     "rpm/config/prometheus-aggregate-exporter.env": "/etc/sysconfig/prometheus/prometheus-aggregate-exporter.env"
     "rpm/config/prometheus-aggregate-exporter-config.yml": "/etc/sysconfig/prometheus/prometheus-aggregate-exporter-config.yml"
   scripts:
-    preinstall: "scripts/preinstall.sh"
-    postinstall: "scripts/postinstall.sh"
-    preremove: "scripts/preremove.sh"
-    postremove: "scripts/postremove.sh"
+    preinstall: "rpm/scripts/preinstall.sh"
+    postinstall: "rpm/scripts/postinstall.sh"
+    preremove: "rpm/scripts/preremove.sh"
+    postremove: "rpm/scripts/postremove.sh"

@@ -1,0 +1,16 @@
+version: '2'
+services:
+  rpmtest_prometheus_aggregate_exporter:
+    privileged: true
+    build:
+      context: .
+      args:
+        - "RPM_FILE_NAME=${RPM_FILE_NAME}"
+    image: rpmtest_prometheus_aggregate_exporter:1.0
+    volumes:
+      - .:/test
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /test
+    entrypoint:
+      - sleep
+      - infinity

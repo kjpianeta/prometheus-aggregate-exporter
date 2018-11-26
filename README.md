@@ -1,4 +1,14 @@
 # prometheus-aggregate-exporter
-Prometheus exporter that aggregates other exporters based on the tarket URL
+Prometheus exporter is a Go lang application that aggregates other exporters based on the target URL.
 
-Github Token
+### Requires
+[goreleaser](https://goreleaser.com/introduction/)
+
+### Create a release and publish it to Github
+```
+goreleaser release
+```
+### Engineering RPM build
+```
+goreleaser release --rm-dist --snapshot
+```

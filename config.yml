@@ -1,0 +1,8 @@
+server:
+  bind: ":9100"
+timeout: 1000 #ms
+targets:
+    - "http://localhost:9101/metrics"
+    - "http://localhost:9102/metrics"
+    - "http://localhost:9103/metrics"
+    

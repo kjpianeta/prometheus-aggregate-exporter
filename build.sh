@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-set -ex
-export GITHUB_TOKEN="a9e8fd7694ce5bfa6f009aa86150e949727571bc"
-export DOCKER_USERNAME="kpianeta"
-export DOCKER_PASSWORD="Diache123!"
+: "${GITHUB_TOKEN?Not set. Need to set env variable GITHUB_TOKEN}"
+: "${DOCKER_USERNAME?Not set. Need to set env variable DOCKER_USERNAME}"
+: "${DOCKER_PASSWORD?Not set. Need to set env variable DOCKER_PASSWORD}"
 
 docker pull goreleaser/goreleaser
 function goreleasers { 
@@ -15,4 +14,4 @@ function goreleasers {
         -e DOCKER_PASSWORD=${DOCKER_PASSWORD} \
         goreleaser/goreleaser "$@"
     }
-goreleasers release --rm-dist --skip-publish
+goreleasers release --rm-dist

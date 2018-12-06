@@ -1,7 +1,7 @@
 # Make sure to check the documentation at http://goreleaser.com
 before:
   hooks:
-  - go get ./...
+#  - go mod init
 
 builds:
   -
@@ -9,6 +9,7 @@ builds:
     binary: prometheus-aggregate-exporter
     goos:
       - linux
+      - darwin
     goarch:
       - amd64
     env:

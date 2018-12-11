@@ -1,14 +1,12 @@
 package main
 
 import (
-	//"flag"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
-	//"log"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/prometheus/client_model/go"
@@ -28,10 +26,22 @@ var (
 		"web.telemetry-path",
 		"Path under which to expose metrics.",
 	).Default("/metrics").String()
-	configPathFlag = kingpin.Flag(
+	configPath = kingpin.Flag(
 		"app.config-path",
 		"Path to config YAML file.",
 	).Default("config.yml").String()
+	sslFlag = kingpin.Flag(
+		"web.ssl-transport",
+		"Enable SSL HTTP Transport.",
+	).Short('s').Bool()
+	certFilePath = kingpin.Flag(
+		"web.tls-cert-path",
+		"Path to TLS cert file.",
+	).Default("cert.pem").String()
+	keyFilePath = kingpin.Flag(
+		"web.tls-key-path",
+		"Path to TLS key file.",
+	).Default("key.pem").String()
 	verboseFlag = kingpin.Flag(
 		"app.verbose-log",
 		"Enable verbose logs.",
@@ -50,7 +60,13 @@ var (
 	).Default("1000ms").Duration()
 )
 
-type instanceConfig struct {
+type Context struct {
+	Targets         []string
+	authSecretToken string
+	targetScrapeTimeout time.Duration
+}
+
+type ConfigFileInstance struct {
 	Targets []string
 }
 
@@ -67,14 +83,15 @@ type TargetExporterHttpClient struct {
 	httpClient *http.Client
 }
 
-// The ParseYAML pointerMethod invokes the (pointer)receiver c *instanceConfig
-func (c *instanceConfig) ParseYAML(data []byte) error {
+// The ParseYAML pointerMethod invokes the (pointer)receiver c *ConfigFileInstance
+func (c *ConfigFileInstance) ParseYAML(data []byte) error {
 	if err := yaml.Unmarshal(data, c); err != nil {
 		return err
 	}
 	return nil
 }
-func indexHandler(httpResponseWritter http.ResponseWriter, r *http.Request) {
+
+func (c *Context) handleIndex(httpResponseWritter http.ResponseWriter, r *http.Request) {
 	httpResponseWritter.Write([]byte(`<html>
              <head><title>Prometheus Aggregate Exporter</title></head>
              <body>
@@ -86,66 +103,43 @@ func indexHandler(httpResponseWritter http.ResponseWriter, r *http.Request) {
              </html>`))
 }
 
-func main() {
-
-	log.AddFlags(kingpin.CommandLine)
-	kingpin.Version(version.Print("prometheus-aggregate-exporter"))
-	kingpin.HelpFlag.Short('h')
-	kingpin.Parse()
-	// Open YAML config file
-	configFile, err := os.Open(*configPathFlag)
+func (c *Context) handleMetrics(httpResponseWritter http.ResponseWriter, r *http.Request) {
+	aggregator := &TargetExporterHttpClient{httpClient: &http.Client{Timeout: time.Duration(c.targetScrapeTimeout) * time.Millisecond}}
+	defer r.Body.Close()
+	err := r.ParseForm()
 	if err != nil {
-		log.Fatalf("Failed to open config file at path %s due to error: %s", *configPathFlag, err.Error())
+		http.Error(httpResponseWritter, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	aggregator.Aggregate(c.Targets, httpResponseWritter)
+}
+
+func getConfigFromYml() ConfigFileInstance {
+	var config ConfigFileInstance
+	log.Infof("Opening config file at path %s.", *configPath)
+	configFile, err := os.Open(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to open config file at path %s due to error: %s", *configPath, err.Error())
 	}
 	// Close file before exiting main()
 	defer configFile.Close()
 
 	// Read contents of YAML config file
+	log.Infof("Reading config file %s content.s", *configPath)
 	configData, err := ioutil.ReadAll(configFile)
 	if err != nil {
-		log.Fatalf("Failed to read config file at path %s due to error: %s", *configPathFlag, err.Error())
+		log.Fatalf("Failed to read config file at path %s due to error: %s", *configPath, err.Error())
 	}
-
-	// ParseYAML contents of YAML config file
-	var config instanceConfig
+	log.Infof("Parsing config file %s contents as YAML.", *configPath)
 	if err := config.ParseYAML(configData); err != nil {
 		log.Fatal(err)
 	}
+	log.Infof("Closing config file %s.", *configPath)
+	log.Infof("Parsed config: % +v", config)
+	return config
 
-	// Instantiate HTTP client
-	aggregator := &TargetExporterHttpClient{httpClient: &http.Client{Timeout: time.Duration(*targetScrapeTimeout) * time.Millisecond}}
-
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/", indexHandler)
-	mux.HandleFunc(*metricsPath, func(httpResponseWritter http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
-		err := r.ParseForm()
-		if err != nil {
-			http.Error(httpResponseWritter, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		if target := r.Form.Get("target"); target != "" {
-			targetKey, err := strconv.Atoi(target)
-			if err != nil || len(config.Targets)-1 < targetKey {
-				http.Error(httpResponseWritter, "Bad Request", http.StatusBadRequest)
-				return
-			}
-			aggregator.Aggregate([]string{config.Targets[targetKey]}, httpResponseWritter)
-		} else {
-			aggregator.Aggregate(config.Targets, httpResponseWritter)
-		}
-	})
-	log.Infoln("Starting prometheus-aggregate-exporter", version.Info())
-	log.Infoln("Build context", version.BuildContext())
-	log.Infoln("Listening on", *listenAddress)
-	//log.Infoln("Starting server on %s...", config.Server.Bind)
-	if err := http.ListenAndServe(*listenAddress, mux); err != nil {
-		log.Fatal(err)
-	}
 }
-
-// The Aggregate pointerMethod method invokes the (pointer)receiver f *TargetExporterHttpClient
+// The Aggregate pointerMethod invokes the (pointer)receiver f *TargetExporterHttpClient
 func (f *TargetExporterHttpClient) Aggregate(targets []string, output io.Writer) {
 
 	// Create bi-directional channel of target scrape results.
@@ -172,7 +166,7 @@ func (f *TargetExporterHttpClient) Aggregate(targets []string, output io.Writer)
 				countResults++
 				// Log target scrape failure and move along with next scrape target in targets.
 				if targetScrapeResult.Error != nil {
-					log.Infoln("Target scrape error: %s", targetScrapeResult.Error.Error())
+					log.Infof("Target scrape error: %s", targetScrapeResult.Error.Error())
 					continue
 				}
 				// Iterate thru every metric family and append label.
@@ -191,7 +185,7 @@ func (f *TargetExporterHttpClient) Aggregate(targets []string, output io.Writer)
 					}
 				}
 				if *verboseFlag {
-					log.Infoln("Success: Target %s scraped in %.3f secs.", targetScrapeResult.URL, targetScrapeResult.SecondsTaken)
+					log.Infof("Success: Target %s scraped in %.3f secs.", targetScrapeResult.URL, targetScrapeResult.SecondsTaken)
 				}
 			}
 		}
@@ -244,4 +238,50 @@ func parseMetricFamilies(sourceData io.Reader) (map[string]*io_prometheus_client
 		return nil, err
 	}
 	return metricFamiles, nil
+}
+
+func httpDo(ctx context.Context, req *http.Request, f func(*http.Response, error) error) error {
+	// Run the HTTP request in a goroutine and pass the response to f.
+	tr := &http.Transport{}
+	client := &http.Client{Transport: tr}
+	c := make(chan error, 1)
+	go func() { c <- f(client.Do(req)) }()
+	select {
+	case <-ctx.Done():
+		tr.CancelRequest(req)
+		<-c // Wait for f to return.
+		return ctx.Err()
+	case err := <-c:
+		return err
+	}
+}
+
+func main() {
+
+	log.AddFlags(kingpin.CommandLine)
+	kingpin.Version(version.Print("prometheus-aggregate-exporter"))
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
+	// Get target config from YAML file
+	//config := getConfigFromYml()
+	config := getConfigFromYml()
+
+	ctx := &Context{Targets: config.Targets, targetScrapeTimeout: *targetScrapeTimeout}
+	// Instantiate HTTP client
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", ctx.handleIndex)
+	mux.HandleFunc(*metricsPath, ctx.handleMetrics)
+	log.Infoln("Starting prometheus-aggregate-exporter", version.Info())
+	log.Infoln("Build context", version.BuildContext())
+	log.Infoln("Listening on", *listenAddress)
+	if *sslFlag == true {
+		if err := http.ListenAndServeTLS(*listenAddress, *certFilePath, *keyFilePath, mux); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		if err := http.ListenAndServe(*listenAddress, mux); err != nil {
+			log.Fatal(err)
+		}
+	}
 }

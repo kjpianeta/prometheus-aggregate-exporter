@@ -38,7 +38,7 @@ describe file("/var/log/prometheus/prometheus-aggregate-exporter.log") do
 end
 
 describe file("/etc/sysconfig/prometheus/prometheus-aggregate-exporter.env") do
-  its("content") { should match 'EXPORTER_ARGS\=\"-config=\/etc\/sysconfig\/prometheus\/prometheus-aggregate-exporter-config.yml\"' }
+  its("content") { should match 'EXPORTER_ARGS\=\"--app.config-path=\/etc\/sysconfig\/prometheus\/prometheus-aggregate-exporter-config.yml\"' }
 end
 
 describe service("prometheus-aggregate-exporter") do
@@ -47,10 +47,6 @@ describe service("prometheus-aggregate-exporter") do
   it { should be_running }
 end
 
-describe package("prometheus-aggregate-exporter") do
-  it { should be_installed }
-  its("version") { should eq "0.0.0-1" }
-end
 
 describe command("service prometheus-aggregate-exporter status") do
   its("stdout") { should match 'prometheus-aggregate-exporter \(pid  \d*\) is running...' }

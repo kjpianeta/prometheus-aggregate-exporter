@@ -2,3 +2,4 @@
 dist/
 rpm/test/*.rpm
 notes.md
+*.pem

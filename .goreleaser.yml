@@ -14,6 +14,8 @@ builds:
       - amd64
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/prometheus/common/version.Version={{.Version}} -X github.com/prometheus/common/version.Revision={{.ShortCommit}} -X github.com/prometheus/common/version.BuildUser={{.Env.USER}} -X github.com/prometheus/common/version.BuildDate={{.Date}}.
 archive:
   name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
   wrap_in_directory: true
